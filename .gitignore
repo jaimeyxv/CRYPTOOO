@@ -1,0 +1,13 @@
+# Secretos - NUNCA subir
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Datos locales del bot
+data/
+*.log
