@@ -74,6 +74,11 @@ class Storage:
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
+                CREATE TABLE IF NOT EXISTS runtime_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
         self._migrate_json()
@@ -197,6 +202,22 @@ class Storage:
         with self._lock, self._connect() as con:
             rows = con.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
+
+    def set_runtime_state(self, key: str, value: str) -> None:
+        """Persiste una preferencia operativa que debe sobrevivir reinicios."""
+        if not key or len(key) > 100:
+            raise ValueError("runtime state key invalida")
+        with self._lock, self._connect() as con:
+            con.execute(
+                """INSERT INTO runtime_state(key, value, updated_at) VALUES (?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                (key, value, utc_now()),
+            )
+
+    def get_runtime_state(self, key: str) -> str | None:
+        with self._lock, self._connect() as con:
+            row = con.execute("SELECT value FROM runtime_state WHERE key = ?", (key,)).fetchone()
+        return str(row["value"]) if row is not None else None
 
     def performance(self) -> dict:
         with self._lock, self._connect() as con:

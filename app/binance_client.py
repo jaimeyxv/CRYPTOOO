@@ -164,7 +164,15 @@ class BinanceClient:
             raise BinanceError(f"Simbolo desconocido: {symbol}")
         item = data["symbols"][0]
         filters = {f["filterType"]: f for f in item["filters"]}
-        lot = filters.get("MARKET_LOT_SIZE") or filters.get("LOT_SIZE", {})
+        market_lot = filters.get("MARKET_LOT_SIZE") or {}
+        regular_lot = filters.get("LOT_SIZE") or {}
+        # Testnet puede publicar MARKET_LOT_SIZE con stepSize=0. Usarlo causaria
+        # una division por cero al cuantizar una venta; LOT_SIZE sigue siendo valido.
+        try:
+            market_step_valid = Decimal(str(market_lot.get("stepSize", "0"))) > 0
+        except (ValueError, ArithmeticError):
+            market_step_valid = False
+        lot = market_lot if market_step_valid else regular_lot
         notional = filters.get("NOTIONAL") or filters.get("MIN_NOTIONAL", {})
         info = {
             "base": item["baseAsset"], "quote": item["quoteAsset"],
@@ -178,6 +186,8 @@ class BinanceClient:
     @staticmethod
     def _ajustar_cantidad(cantidad: float, step: str) -> str:
         paso = Decimal(step)
+        if paso <= 0:
+            raise BinanceError("Binance devolvio un stepSize invalido para la cantidad")
         ajustada = (Decimal(str(cantidad)) / paso).to_integral_value(rounding=ROUND_DOWN) * paso
         return format(ajustada.normalize(), "f")
 

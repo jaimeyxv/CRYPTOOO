@@ -11,3 +11,9 @@ env/
 # Datos locales del bot
 data/
 *.log
+
+# Android: resultados locales de Gradle y APK generados
+android/.gradle/
+android/**/build/
+android/local.properties
+*.apk

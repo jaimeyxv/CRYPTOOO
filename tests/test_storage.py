@@ -47,6 +47,13 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(events[0]["message"], "segundo")
         self.assertTrue(self.store.healthy())
 
+    def test_runtime_state_round_trip(self):
+        self.assertIsNone(self.store.get_runtime_state("operation_mode"))
+        self.store.set_runtime_state("operation_mode", "AUTO")
+        self.assertEqual(self.store.get_runtime_state("operation_mode"), "AUTO")
+        self.store.set_runtime_state("operation_mode", "OFF")
+        self.assertEqual(self.store.get_runtime_state("operation_mode"), "OFF")
+
 
 if __name__ == "__main__":
     unittest.main()

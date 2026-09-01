@@ -1,0 +1,40 @@
+plugins {
+    id "com.android.application"
+}
+
+def defaultAurumUrl = "https://web-production-93f88c.up.railway.app"
+def aurumUrl = System.getenv("AURUM_URL") ?: defaultAurumUrl
+if (!aurumUrl.startsWith("https://")) {
+    throw new GradleException("AURUM_URL debe utilizar HTTPS")
+}
+
+android {
+    namespace "com.aurum.trading"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.aurum.trading"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+        buildConfigField "String", "AURUM_URL", "\"${aurumUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

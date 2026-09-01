@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 import uuid
 import csv
@@ -41,6 +42,8 @@ async def lifespan(_: FastAPI):
         for warning in config.validar():
             logger.warning("Configuracion: %s", warning)
             storage.add_event("WARNING", "config", warning)
+        restored_mode = estado.restaurar_modo()
+        logger.info("Modo operativo restaurado: %s", restored_mode.value)
         engine.iniciar()
         yield
     finally:
@@ -176,13 +179,24 @@ def api_cambiar_modo(modo: str = Form(...)):
         raise HTTPException(status_code=400, detail=f"Modo invalido: {modo}") from exc
     if nuevo == Modo.AUTO and not config.use_testnet and not config.enable_live_trading:
         raise HTTPException(status_code=403, detail="AUTO en Mainnet requiere ENABLE_LIVE_TRADING=true")
-    estado.cambiar_modo(nuevo)
+    try:
+        estado.cambiar_modo(nuevo)
+    except sqlite3.Error as exc:
+        logger.exception("No se pudo persistir el modo %s", nuevo.value)
+        raise HTTPException(status_code=503, detail="No se pudo guardar el modo; no fue activado") from exc
     return {"ok": True, "modo": nuevo.value}
 
 
 @app.post("/api/parada", dependencies=[Depends(requerir_auth)])
 def api_parada():
-    estado.parada_emergencia()
+    try:
+        estado.parada_emergencia()
+    except sqlite3.Error as exc:
+        logger.exception("OFF aplicado en memoria, pero no pudo persistirse")
+        raise HTTPException(
+            status_code=503,
+            detail="El motor paso a OFF, pero no se pudo guardar. Revisa el volumen antes de reiniciar.",
+        ) from exc
     return {"ok": True, "modo": Modo.OFF.value, "mensaje": "Motor detenido; la posicion no fue liquidada"}
 
 
@@ -199,7 +213,8 @@ def api_orden(request: Request, tipo: str = Form(...)):
         incident_id = getattr(request.state, "request_id", uuid.uuid4().hex[:16])
         logger.exception("Fallo no controlado en orden %s [incidente=%s]", tipo, incident_id)
         estado.registrar_evento(
-            f"Orden {tipo} no completada; incidente {incident_id}", "ERROR", "order"
+            f"Orden {tipo} no completada; {type(exc).__name__}; incidente {incident_id}",
+            "ERROR", "order",
         )
         return JSONResponse(
             {

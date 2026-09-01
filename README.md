@@ -25,7 +25,7 @@ El proyecto ya dispone de:
 - Telemetría del motor, parada de emergencia, liveness y readiness.
 - Contenedores, HTTPS con Caddy y CI mediante GitHub Actions.
 
-La aplicación siempre arranca en `OFF` por seguridad. El modo y la última señal son temporales; las posiciones, operaciones y bitácora se conservan en SQLite.
+La primera ejecución arranca en `OFF`. Después, el modo confirmado se conserva en SQLite y se restaura tras reinicios o despliegues; `AUTO` continúa operando aunque el navegador esté cerrado. Posiciones, operaciones y bitácora también se conservan. La última señal se recalcula al reanudar el motor.
 
 ## Modos de operación
 
@@ -283,6 +283,27 @@ Sin este volumen, el historial SQLite se perderá cuando Railway reemplace el co
 
 Para la prueba comparte únicamente la URL y la contraseña del panel. La misma instancia, saldo ficticio e historial serán compartidos por todas las personas que accedan; no publiques esa información en canales abiertos.
 
+## Aplicación Android sin anuncios
+
+El repositorio incluye una aplicación Android ligera en `android/`. No incorpora SDK publicitario, analítica, compras ni permisos sensibles: únicamente acceso a Internet y estado de red. La aplicación abre el panel HTTPS de Railway en un WebView endurecido, mantiene la sesión, permite descargar el CSV y envía enlaces externos al navegador.
+
+La interfaz web cambia automáticamente según el dispositivo:
+
+- Tablet horizontal: mercado y controles en dos columnas.
+- Tablet vertical: mercado, modo, posición y señal aparecen primero; reportes e historial después.
+- Móvil: una columna, controles táctiles de al menos 44 px, gráficas compactas y tablas desplazables.
+- Se respetan rotación, áreas seguras, zoom del sistema y navegación atrás de Android.
+
+### Generar el APK sin instalar Android Studio
+
+1. En GitHub abre **Settings → Secrets and variables → Actions → Variables**.
+2. Crea `AURUM_URL` con la URL HTTPS de Railway. Si conservas `https://web-production-93f88c.up.railway.app`, el proyecto ya la usa como valor predeterminado.
+3. Abre **Actions → Android APK → Run workflow**. Un cambio dentro de `android/` también inicia la compilación automáticamente.
+4. Cuando finalice, abre la ejecución y descarga el artefacto `aurum-android-debug`.
+5. Descomprime `app-debug.apk`, transfiérelo a la tablet y autoriza temporalmente **Instalar aplicaciones desconocidas** para el gestor de archivos utilizado.
+
+El APK debug está firmado automáticamente por Android y es apropiado para pruebas privadas. Para distribuir en Google Play se debe generar un Android App Bundle firmado con un keystore privado y aplicar el proceso de publicación de Play Console.
+
 ### Coste y disponibilidad
 
 - Railway ofrece una prueba inicial con crédito y después un plan Free con un crédito mensual reducido. La aplicación puede consumirlo antes de acabar el mes.
@@ -392,7 +413,7 @@ La base `aurum.db` permanece en el volumen `aurum_data`. Debes incluir ese volum
 - La posición local no se reconcilia automáticamente con Binance.
 - Una orden ejecutada pero no guardada puede dejar estados divergentes.
 - SQLite está diseñado para una sola instancia; no proporciona alta disponibilidad distribuida.
-- El modo y la última señal vuelven a su estado seguro al reiniciar.
+- El modo se restaura desde SQLite al reiniciar; una corrupción o pérdida del volumen puede impedir esa continuidad.
 - No hay reconciliación periódica del saldo, órdenes abiertas e historial remoto.
 - El P&L no modela por separado comisiones, slippage ni conversiones de fees.
 - No existe todavía backtesting histórico ni validación estadística de la estrategia.

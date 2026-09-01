@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Aurum · Consola de Trading</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -54,10 +54,10 @@ body{
 @keyframes pulse{50%{opacity:.5}}
 
 /* ---------- Layout ---------- */
-.grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:16px}
 .split-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .col{display:flex;flex-direction:column;gap:16px}
-@media(max-width:920px){.grid,.split-grid{grid-template-columns:1fr}}
+@media(max-width:920px){.grid{grid-template-columns:minmax(0,1fr) minmax(300px,340px)}}
 
 .card{
   background:linear-gradient(180deg,var(--panel-2),var(--panel));
@@ -229,10 +229,35 @@ body{
 .quant-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}.quant-cell{padding:8px;background:var(--elev);border-radius:8px;border:1px solid var(--border-soft)}.quant-cell .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}.quant-cell .v{font-size:13px;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums}
 .model-note{display:flex;gap:6px;margin-top:10px;color:var(--faint);font-size:9.5px;line-height:1.4}.model-note svg{width:12px;height:12px;flex:none;margin-top:1px}
 .order-status{display:none;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:11px}.order-status.show{display:flex}.spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent-2);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-.order-dialog{width:min(440px,calc(100% - 28px));padding:0;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.65)}.order-dialog::backdrop{background:rgba(3,5,10,.78);backdrop-filter:blur(5px)}
+.order-dialog{position:fixed;inset:0;margin:auto;width:min(440px,calc(100% - 28px));max-height:calc(100dvh - 28px);overflow:auto;padding:0;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.65)}.order-dialog::backdrop{background:rgba(3,5,10,.78);backdrop-filter:blur(5px)}
 .dialog-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}.dialog-h b{font-size:14px}.dialog-close{border:0;background:transparent;color:var(--muted);cursor:pointer}.dialog-close svg{width:18px;height:18px}.dialog-b{padding:18px}.order-review{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.review-cell{padding:10px;background:var(--elev);border:1px solid var(--border-soft);border-radius:9px}.review-cell .k{font-size:9px;text-transform:uppercase;color:var(--muted)}.review-cell .v{font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums}.dialog-warning{display:flex;gap:8px;color:var(--muted);font-size:11px;line-height:1.5}.dialog-warning svg{width:15px;height:15px;flex:none;color:var(--hold)}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px;border-top:1px solid var(--border)}.dialog-actions button{border:1px solid var(--border);border-radius:9px;padding:10px 14px;font:700 12px 'Inter';cursor:pointer}.dialog-cancel{background:transparent;color:var(--muted)}.dialog-confirm{background:var(--sell);border-color:var(--sell)!important;color:#fff}.dialog-confirm.buy{background:var(--buy);border-color:var(--buy)!important;color:#04120a}
 button:disabled{cursor:not-allowed;filter:saturate(.3)}
 @media(max-width:650px){.workspace-head{align-items:flex-start}.sync-meta{display:none}.section-toolbar{align-items:stretch}.section-toolbar .group{width:100%}.search-wrap{flex:1}.search-wrap input{width:100%}.asset-summary{grid-template-columns:1fr 1fr}.asset-summary .mini:last-child{grid-column:1/-1}.history th:nth-child(4),.history td:nth-child(4),.history th:nth-child(5),.history td:nth-child(5){display:none}}
+
+/* ---------- Tablet and touch layout ---------- */
+@media(max-width:900px){
+  .wrap{padding:12px max(12px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .topbar{position:sticky;top:max(8px,env(safe-area-inset-top));z-index:25;margin-bottom:16px;background:rgba(18,20,29,.94);backdrop-filter:blur(14px)}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .grid>.col{display:contents}
+  .market-card{order:1}.mode-card{order:2}.position-card{order:3}.signal-card{order:4}.performance-strip{order:5}.risk-card{order:6}.account-section{order:7}.history-card{order:8}.engine-card{order:9}
+  .split-grid{grid-template-columns:1fr 1fr}
+  #chart{height:320px}.price{font-size:27px}
+  .seg button,.act,.danger-btn{min-height:48px}.control,.icon-btn,.pill{min-height:40px}
+  .card-h{padding:14px}.card-b{padding:14px}.table-wrap{max-height:440px}
+  .history th{position:sticky;top:0;background:var(--panel-2);z-index:2}
+}
+@media(max-width:600px){
+  .split-grid{grid-template-columns:1fr}.top-right{gap:6px}.topbar{align-items:flex-start}.brand span{display:none}
+  #conn-pill span{max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace-head h2{font-size:20px}
+  #chart{height:280px}#rsi-chart{height:95px}.price-row{align-items:flex-start}.price{font-size:24px}
+  .chart-tools{overflow-x:auto;justify-content:flex-start}.chart-tools button{min-width:43px;min-height:38px}
+  .kpi-grid{gap:8px}.kpi{padding:11px}.kpi .v{font-size:17px}.metrics,.quant-grid,.pos-rows,.engine-grid{grid-template-columns:1fr 1fr}
+  .card-actions{width:100%;justify-content:flex-start}.card-h{align-items:flex-start;flex-wrap:wrap}.table-wrap{max-height:390px}
+  .toast{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateY(20px);justify-content:flex-start}.toast.show{transform:translateY(0)}
+}
+@media(max-width:390px){.kpi-grid,.metrics,.quant-grid,.pos-rows,.engine-grid{grid-template-columns:1fr}.asset-summary{grid-template-columns:1fr}.asset-summary .mini:last-child{grid-column:auto}}
+@media(pointer:coarse){button,a,.toggle,input,select{touch-action:manipulation}.icon-btn,.dialog-close{min-width:44px;min-height:44px}.filter-btn{min-height:38px}.history td{padding-top:13px;padding-bottom:13px}}
 </style>
 </head>
 <body>
@@ -267,7 +292,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
   <div class="grid">
     <!-- Columna principal -->
     <div class="col">
-      <div class="card">
+      <div class="card market-card">
         <div class="card-b">
           <div class="price-row">
             <div>
@@ -286,14 +311,14 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         <div id="rsi-chart"></div>
       </div>
 
-      <div class="kpi-grid">
+      <div class="kpi-grid performance-strip">
         <div class="kpi" title="Ganancia o pérdida confirmada únicamente al cerrar posiciones"><span class="info"><i data-lucide="info"></i></span><div class="k">Resultado realizado</div><div class="v" id="kpi-pnl">—</div><div class="s">USDT de posiciones cerradas</div></div>
         <div class="kpi" title="Porcentaje de ventas cerradas con resultado positivo"><span class="info"><i data-lucide="info"></i></span><div class="k">Operaciones ganadoras</div><div class="v" id="kpi-win">—</div><div class="s" id="kpi-record">Sin cierres todavía</div></div>
         <div class="kpi" title="Ganancias brutas divididas entre pérdidas brutas; requiere ventas cerradas"><span class="info"><i data-lucide="info"></i></span><div class="k">Factor de beneficio</div><div class="v" id="kpi-pf">—</div><div class="s">Disponible después de cerrar</div></div>
         <div class="kpi" title="Suma del importe de todas las compras y ventas"><span class="info"><i data-lucide="info"></i></span><div class="k">Capital movilizado</div><div class="v" id="kpi-volume">—</div><div class="s">USDT comprado y vendido</div></div>
       </div>
 
-      <div class="split-grid">
+      <div class="split-grid account-section">
         <div class="card">
           <div class="card-h">
             <div><div class="t"><i data-lucide="wallet"></i> Activos de la cuenta</div><div class="card-subtitle" id="balance-caption">Fondos disponibles y bloqueados</div></div>
@@ -317,7 +342,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card history-card">
         <div class="card-h"><div><div class="t"><i data-lucide="history"></i> Historial de operaciones</div><div class="card-subtitle">Ejecuciones confirmadas y rendimiento acumulado</div></div><div class="card-actions"><a class="pill" href="/api/historial.csv" style="text-decoration:none"><i data-lucide="download"></i> Exportar CSV</a><span class="pill" id="history-count">0 registros</span></div></div>
         <div class="section-toolbar">
           <div class="group"><select class="control" id="history-side" aria-label="Filtrar por lado"><option value="all">Todas las operaciones</option><option value="BUY">Compras</option><option value="SELL">Ventas</option></select><div class="search-wrap"><i data-lucide="search"></i><input class="control" id="history-search" type="search" placeholder="Buscar motivo…"></div></div>
@@ -335,7 +360,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
 
     <!-- Columna lateral -->
     <div class="col">
-      <div class="card">
+      <div class="card signal-card">
         <div class="card-h"><div class="t"><i data-lucide="radar"></i> Señal de la estrategia</div></div>
         <div class="card-b">
           <div class="signal-hero hold" id="sig-hero">
@@ -394,7 +419,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card position-card">
         <div class="card-h">
           <div class="t"><i data-lucide="briefcase"></i> Posición</div>
         </div>
@@ -404,7 +429,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card mode-card">
         <div class="card-h"><div class="t"><i data-lucide="sliders-horizontal"></i> Modo de operación</div></div>
         <div class="card-b">
           <div class="seg" id="seg">
@@ -413,7 +438,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
             <button data-m="AUTO" onclick="setModo('AUTO')"><i data-lucide="zap"></i> AUTO</button>
           </div>
           <div class="mode-desc" id="mode-desc"><i data-lucide="info"></i> <span>Selecciona un modo para empezar.</span></div>
-          <div class="mode-warning"><i data-lucide="shield-alert"></i><span>Las órdenes se envían a Binance Testnet. AUTO puede operar sin confirmación mientras esté activo.</span></div>
+          <div class="mode-warning"><i data-lucide="shield-alert"></i><span>Modo persistente: Railway restaurará esta selección después de reiniciar. AUTO seguirá operando sin el navegador abierto.</span></div>
 
           <div class="actions" id="actions">
             <button class="act buy" onclick="abrirOrden('COMPRAR')"><i data-lucide="arrow-up-right"></i> Comprar</button>
@@ -424,7 +449,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card risk-card">
         <div class="card-h"><div class="t"><i data-lucide="shield-check"></i> Control de riesgo</div></div>
         <div class="card-b">
           <div class="risk-row"><span>Compras de hoy</span><b id="risk-trades">—</b></div>
@@ -436,7 +461,7 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card engine-card">
         <div class="card-h"><div class="t"><i data-lucide="server-cog"></i> Motor</div></div>
         <div class="card-b"><div class="engine-grid">
           <div class="engine-item"><div class="k">Estado</div><div class="v" id="engine-phase">—</div></div>
@@ -820,7 +845,7 @@ async function ejecutarOrden(){
     try{d=raw?JSON.parse(raw):{}}catch(e){d={mensaje:raw&&raw.length<240?raw:`El servidor respondió HTTP ${r.status} sin un detalle JSON válido.`}}
     const incident=d.incidente||r.headers.get('X-Request-ID');
     if(r.ok&&d.ok){toast(d.mensaje||`${verbo} ejecutada`,5200)}
-    else{toast(`⚠ ${d.mensaje||d.detail||`La ${verbo.toLowerCase()} no fue confirmada.`}${incident?` · Incidente ${incident}`:''}`,8000)}
+    else{toast(`⚠ ${d.mensaje||d.detail||`La ${verbo.toLowerCase()} no fue confirmada.`}${d.tipo_error?` · ${d.tipo_error}`:''}${incident?` · Incidente ${incident}`:''}`,8000)}
   }catch(e){
     toast(`⚠ No se recibió respuesta del servidor (${e.name||'error de red'}). Revisa el estado del despliegue antes de repetir la orden.`,8000);
   }finally{

@@ -72,15 +72,39 @@ class EstadoBot:
             if nuevo == self._modo:
                 return
             anterior = self._modo
-            self._modo = nuevo
+            # Nunca activar un modo que no se haya podido guardar. OFF se aplica
+            # primero por seguridad, aunque la persistencia llegara a fallar.
+            if nuevo == Modo.OFF:
+                self._modo = nuevo
+                storage.set_runtime_state("operation_mode", nuevo.value)
+            else:
+                storage.set_runtime_state("operation_mode", nuevo.value)
+                self._modo = nuevo
             self._ultimo_cambio = datetime.now(timezone.utc)
             self._append_event("WARNING" if nuevo == Modo.AUTO else "INFO", "mode",
                                f"Modo cambiado: {anterior.value} -> {nuevo.value}")
+
+    def restaurar_modo(self) -> Modo:
+        """Restaura el ultimo modo confirmado tras reiniciar el proceso."""
+        with self._lock:
+            guardado = storage.get_runtime_state("operation_mode")
+            try:
+                restaurado = Modo(guardado) if guardado else Modo.OFF
+            except ValueError:
+                logger.error("Modo persistido invalido: %r; se usara OFF", guardado)
+                restaurado = Modo.OFF
+            self._modo = restaurado
+            self._ultimo_cambio = datetime.now(timezone.utc)
+            storage.set_runtime_state("operation_mode", restaurado.value)
+            level = "WARNING" if restaurado == Modo.AUTO else "INFO"
+            self._append_event(level, "mode", f"Modo restaurado al iniciar: {restaurado.value}")
+            return restaurado
 
     def parada_emergencia(self) -> None:
         with self._lock:
             anterior = self._modo
             self._modo = Modo.OFF
+            storage.set_runtime_state("operation_mode", Modo.OFF.value)
             self._ultimo_cambio = datetime.now(timezone.utc)
             self._append_event("WARNING", "risk", f"Parada de emergencia activada desde {anterior.value}")
 
