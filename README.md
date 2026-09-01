@@ -83,6 +83,18 @@ El motor descarga 150 velas y analiza sus cierres:
 
 En `AUTO`, compra cuando el precio cae `COMPRAR_CAIDA_PCT` desde el máximo de las últimas `CAIDA_VENTANA` velas o cuando la estrategia emite `COMPRAR`. Vende al alcanzar el take-profit, el stop-loss o una señal `VENDER`.
 
+### Modelo cuantitativo del panel
+
+El panel complementa la señal discreta con métricas calculadas sobre los últimos 50 retornos disponibles:
+
+- Probabilidad alcista y bajista implícita mediante una función logística que combina separación SMA normalizada por volatilidad, momentum y RSI.
+- Frecuencia alcista observada con suavizado de Laplace, evitando extremos artificiales en muestras pequeñas.
+- Retorno medio por vela y momentum normalizado por desviación estándar.
+- Incertidumbre mediante entropía binaria de Shannon: cerca de `100%` implica mayor ambigüedad entre ambos escenarios.
+- Relación riesgo/beneficio configurada y tasa de aciertos de equilibrio `stop / (take-profit + stop)`.
+
+La probabilidad implícita es un **score heurístico no calibrado**, no la frecuencia histórica de éxito de la estrategia. El panel muestra el tamaño de muestra y esta advertencia de forma permanente. Convertirla en una probabilidad calibrada requiere backtesting fuera de muestra, comisiones, slippage y validación temporal.
+
 > [!IMPORTANT]
 > El repositorio no incluye backtesting. Los valores predeterminados son ejemplos, no parámetros recomendados para operar dinero real.
 

@@ -29,6 +29,20 @@ class StrategyTests(unittest.TestCase):
         self.assertLessEqual(result.confianza, 100)
         self.assertIsNotNone(result.volatilidad_pct)
 
+    def test_probability_model_is_bounded_and_transparent(self):
+        prices = [100.0]
+        for index in range(60):
+            prices.append(prices[-1] * (1.002 if index % 3 else 0.999))
+        result = analizar(prices, self.cfg)
+        self.assertIsNotNone(result.probabilidad_alcista_pct)
+        self.assertAlmostEqual(
+            result.probabilidad_alcista_pct + result.probabilidad_bajista_pct, 100.0, places=1
+        )
+        self.assertGreaterEqual(result.incertidumbre_pct, 0)
+        self.assertLessEqual(result.incertidumbre_pct, 100)
+        self.assertEqual(result.muestra_retornos, 50)
+        self.assertIn("no-calibrado", result.modelo_probabilidad)
+
     def test_volatility_is_zero_for_flat_market(self):
         self.assertEqual(volatilidad_pct([10] * 22), 0.0)
 

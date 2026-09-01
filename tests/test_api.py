@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.config import config
 from app.main import app
+from app.bot import Modo, estado
 
 
 class ApiTests(unittest.TestCase):
@@ -40,6 +42,21 @@ class ApiTests(unittest.TestCase):
         export = self.client.get("/api/historial.csv")
         self.assertEqual(export.status_code, 200)
         self.assertIn("text/csv", export.headers["content-type"])
+
+    def test_unexpected_order_error_is_returned_as_traceable_json(self):
+        self.client.post("/api/login", data={"pin": config.panel_password})
+        estado.cambiar_modo(Modo.SENALES)
+        try:
+            with patch("app.main.trader.vender", side_effect=RuntimeError("simulated")):
+                response = self.client.post("/api/orden", data={"tipo": "VENDER"})
+            self.assertEqual(response.status_code, 500)
+            payload = response.json()
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["tipo_error"], "RuntimeError")
+            self.assertTrue(payload["incidente"])
+            self.assertEqual(payload["incidente"], response.headers["x-request-id"])
+        finally:
+            estado.cambiar_modo(Modo.OFF)
 
 
 if __name__ == "__main__":

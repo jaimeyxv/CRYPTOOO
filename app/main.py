@@ -62,6 +62,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(config.allowed_host
 async def security_and_observability(request: Request, call_next):
     started = time.perf_counter()
     request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex[:16])
+    request.state.request_id = request_id
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("origin")
         if origin and urlparse(origin).netloc.lower() != request.headers.get("host", "").lower():
@@ -186,15 +187,29 @@ def api_parada():
 
 
 @app.post("/api/orden", dependencies=[Depends(requerir_auth)])
-def api_orden(tipo: str = Form(...)):
+def api_orden(request: Request, tipo: str = Form(...)):
     if estado.modo == Modo.OFF:
         raise HTTPException(status_code=400, detail="Activa SENALES o AUTO antes de operar")
     tipo = tipo.strip().upper()
-    if tipo == "COMPRAR":
-        return trader.comprar("orden manual")
-    if tipo == "VENDER":
-        return trader.vender("orden manual")
-    raise HTTPException(status_code=400, detail=f"Tipo invalido: {tipo}")
+    if tipo not in {"COMPRAR", "VENDER"}:
+        raise HTTPException(status_code=400, detail=f"Tipo invalido: {tipo}")
+    try:
+        return trader.comprar("orden manual") if tipo == "COMPRAR" else trader.vender("orden manual")
+    except Exception as exc:  # nunca devolver HTML opaco al panel para una operacion
+        incident_id = getattr(request.state, "request_id", uuid.uuid4().hex[:16])
+        logger.exception("Fallo no controlado en orden %s [incidente=%s]", tipo, incident_id)
+        estado.registrar_evento(
+            f"Orden {tipo} no completada; incidente {incident_id}", "ERROR", "order"
+        )
+        return JSONResponse(
+            {
+                "ok": False,
+                "mensaje": "La orden no pudo completarse por un error interno. No la repitas hasta revisar Actividad y Railway.",
+                "incidente": incident_id,
+                "tipo_error": type(exc).__name__,
+            },
+            status_code=500,
+        )
 
 
 @app.get("/api/velas", dependencies=[Depends(requerir_auth)])

@@ -13,7 +13,7 @@ Todo se calcula con matematica basica (sin librerias pesadas).
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from math import sqrt
+from math import exp, log2, sqrt
 
 
 @dataclass
@@ -27,6 +27,14 @@ class Analisis:
     tendencia: str        # "alcista" | "bajista" | "lateral"
     confianza: int        # 0-100, intensidad heuristica; no probabilidad
     volatilidad_pct: float | None
+    probabilidad_alcista_pct: float | None = None
+    probabilidad_bajista_pct: float | None = None
+    probabilidad_base_alcista_pct: float | None = None
+    retorno_medio_pct: float | None = None
+    momentum_z: float | None = None
+    incertidumbre_pct: float | None = None
+    muestra_retornos: int = 0
+    modelo_probabilidad: str = "heuristico-v1-no-calibrado"
 
     def dict(self) -> dict:
         return asdict(self)
@@ -101,6 +109,50 @@ def volatilidad_pct(valores: list[float], ventana: int = 20) -> float | None:
     return round(sqrt(varianza), 3)
 
 
+def metricas_probabilisticas(
+    valores: list[float], rapida: float | None, lenta: float | None, valor_rsi: float | None,
+    ventana: int = 50,
+) -> dict:
+    """Score probabilistico transparente; no sustituye una calibracion por backtesting."""
+    muestra = valores[-(ventana + 1):]
+    retornos = [
+        (muestra[i] / muestra[i - 1] - 1) * 100
+        for i in range(1, len(muestra)) if muestra[i - 1] > 0
+    ]
+    n = len(retornos)
+    if n < 10:
+        return {
+            "probabilidad_alcista_pct": None, "probabilidad_bajista_pct": None,
+            "probabilidad_base_alcista_pct": None, "retorno_medio_pct": None,
+            "momentum_z": None, "incertidumbre_pct": None, "muestra_retornos": n,
+        }
+    media = sum(retornos) / n
+    desviacion = sqrt(sum((item - media) ** 2 for item in retornos) / (n - 1))
+    # Base empirica suavizada de Laplace para evitar extremos 0/100 en muestras pequenas.
+    base_alcista = (sum(item > 0 for item in retornos) + 1) / (n + 2)
+    momentum = media / desviacion if desviacion else 0.0
+    precio = valores[-1]
+    volatilidad_relativa = desviacion / 100
+    spread_relativo = ((rapida - lenta) / precio) if precio and rapida is not None and lenta is not None else 0.0
+    spread_normalizado = spread_relativo / volatilidad_relativa if volatilidad_relativa else 0.0
+    rsi_normalizado = ((valor_rsi - 50) / 20) if valor_rsi is not None else 0.0
+    # Combinacion acotada y documentada; es una probabilidad implicita, no calibrada.
+    score = max(-6.0, min(6.0, 0.75 * spread_normalizado + 0.55 * momentum + 0.25 * rsi_normalizado))
+    prob_alcista = 1 / (1 + exp(-score))
+    prob_bajista = 1 - prob_alcista
+    entropia = 0.0
+    for probabilidad in (prob_alcista, prob_bajista):
+        if probabilidad > 0:
+            entropia -= probabilidad * log2(probabilidad)
+    return {
+        "probabilidad_alcista_pct": round(prob_alcista * 100, 1),
+        "probabilidad_bajista_pct": round(prob_bajista * 100, 1),
+        "probabilidad_base_alcista_pct": round(base_alcista * 100, 1),
+        "retorno_medio_pct": round(media, 4), "momentum_z": round(momentum, 3),
+        "incertidumbre_pct": round(entropia * 100, 1), "muestra_retornos": n,
+    }
+
+
 def analizar(cierres: list[float], cfg) -> Analisis:
     """
     Recibe la lista de precios de cierre (mas reciente al final) y la config,
@@ -119,12 +171,14 @@ def analizar(cierres: list[float], cfg) -> Analisis:
 
     # Sin datos suficientes todavia
     if None in (rapida_ahora, rapida_antes, lenta_ahora, lenta_antes):
+        cuantitativas = metricas_probabilisticas(cierres, rapida_ahora, lenta_ahora, valor_rsi)
         return Analisis(
             señal="MANTENER",
             razon="Aun no hay suficientes velas para analizar.",
             precio=precio, rsi=valor_rsi,
             sma_rapida=rapida_ahora, sma_lenta=lenta_ahora,
             tendencia="lateral", confianza=0, volatilidad_pct=volatilidad_pct(cierres),
+            **cuantitativas,
         )
 
     tendencia = "alcista" if rapida_ahora >= lenta_ahora else "bajista"
@@ -155,8 +209,10 @@ def analizar(cierres: list[float], cfg) -> Analisis:
 
     separacion = abs(rapida_ahora - lenta_ahora) / precio * 100 if precio else 0
     confianza = min(100, round(35 + separacion * 20)) if señal != "MANTENER" else min(60, round(separacion * 15))
+    cuantitativas = metricas_probabilisticas(cierres, rapida_ahora, lenta_ahora, valor_rsi)
     return Analisis(
         señal=señal, razon=razon, precio=precio, rsi=valor_rsi,
         sma_rapida=round(rapida_ahora, 2), sma_lenta=round(lenta_ahora, 2),
         tendencia=tendencia, confianza=confianza, volatilidad_pct=volatilidad_pct(cierres),
+        **cuantitativas,
     )

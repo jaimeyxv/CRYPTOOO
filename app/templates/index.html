@@ -222,6 +222,15 @@ body{
 .timezone-badge{color:var(--muted);font-size:10px;display:inline-flex;align-items:center;gap:5px}.timezone-badge svg{width:12px;height:12px}
 .empty-state{padding:30px 18px;text-align:center;color:var(--muted)}.empty-state svg{width:25px;height:25px;color:var(--faint);margin-bottom:7px}.empty-state b{display:block;color:var(--text);font-size:12px;margin-bottom:3px}.empty-state span{font-size:11px}
 .mode-warning{margin-top:12px;border-radius:9px;padding:9px 10px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);color:#d6b45e;font-size:10.5px;display:flex;gap:7px}.mode-warning svg{width:14px;height:14px;flex:none}
+.quant-panel{margin-top:14px;padding:13px;border:1px solid var(--border);border-radius:12px;background:rgba(8,10,16,.38)}
+.quant-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.quant-head b{font-size:11px}.quant-head span{font-size:9px;color:var(--hold);text-align:right}
+.prob-labels{display:flex;justify-content:space-between;margin-top:12px;font-size:11px;font-weight:750}.prob-labels .up{color:var(--buy)}.prob-labels .down{color:var(--sell)}
+.probability-bar{height:8px;display:flex;overflow:hidden;border-radius:99px;background:var(--elev);margin-top:6px}.probability-bar .up{background:var(--buy)}.probability-bar .down{background:var(--sell)}
+.quant-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}.quant-cell{padding:8px;background:var(--elev);border-radius:8px;border:1px solid var(--border-soft)}.quant-cell .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.35px}.quant-cell .v{font-size:13px;font-weight:750;margin-top:2px;font-variant-numeric:tabular-nums}
+.model-note{display:flex;gap:6px;margin-top:10px;color:var(--faint);font-size:9.5px;line-height:1.4}.model-note svg{width:12px;height:12px;flex:none;margin-top:1px}
+.order-status{display:none;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:11px}.order-status.show{display:flex}.spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent-2);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.order-dialog{width:min(440px,calc(100% - 28px));padding:0;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.65)}.order-dialog::backdrop{background:rgba(3,5,10,.78);backdrop-filter:blur(5px)}
+.dialog-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}.dialog-h b{font-size:14px}.dialog-close{border:0;background:transparent;color:var(--muted);cursor:pointer}.dialog-close svg{width:18px;height:18px}.dialog-b{padding:18px}.order-review{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.review-cell{padding:10px;background:var(--elev);border:1px solid var(--border-soft);border-radius:9px}.review-cell .k{font-size:9px;text-transform:uppercase;color:var(--muted)}.review-cell .v{font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums}.dialog-warning{display:flex;gap:8px;color:var(--muted);font-size:11px;line-height:1.5}.dialog-warning svg{width:15px;height:15px;flex:none;color:var(--hold)}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px;border-top:1px solid var(--border)}.dialog-actions button{border:1px solid var(--border);border-radius:9px;padding:10px 14px;font:700 12px 'Inter';cursor:pointer}.dialog-cancel{background:transparent;color:var(--muted)}.dialog-confirm{background:var(--sell);border-color:var(--sell)!important;color:#fff}.dialog-confirm.buy{background:var(--buy);border-color:var(--buy)!important;color:#04120a}
 button:disabled{cursor:not-allowed;filter:saturate(.3)}
 @media(max-width:650px){.workspace-head{align-items:flex-start}.sync-meta{display:none}.section-toolbar{align-items:stretch}.section-toolbar .group{width:100%}.search-wrap{flex:1}.search-wrap input{width:100%}.asset-summary{grid-template-columns:1fr 1fr}.asset-summary .mini:last-child{grid-column:1/-1}.history th:nth-child(4),.history td:nth-child(4),.history th:nth-child(5),.history td:nth-child(5){display:none}}
 </style>
@@ -359,13 +368,27 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
               <div class="v" id="m-slow">—</div>
             </div>
             <div class="metric">
-              <div class="k">Confianza técnica</div>
+              <div class="k">Intensidad del cruce</div>
               <div class="v" id="m-confidence">—</div>
             </div>
             <div class="metric">
               <div class="k">Volatilidad</div>
               <div class="v" id="m-volatility">—</div>
             </div>
+          </div>
+          <div class="quant-panel">
+            <div class="quant-head"><b>Modelo cuantitativo</b><span>Estimación no calibrada</span></div>
+            <div class="prob-labels"><span class="up">Alcista <b id="q-up">—</b></span><span class="down">Bajista <b id="q-down">—</b></span></div>
+            <div class="probability-bar" aria-label="Distribución probabilística"><i class="up" id="q-up-bar" style="width:50%"></i><i class="down" id="q-down-bar" style="width:50%"></i></div>
+            <div class="quant-grid">
+              <div class="quant-cell"><div class="k">Frecuencia alcista</div><div class="v" id="q-base">—</div></div>
+              <div class="quant-cell"><div class="k">Incertidumbre</div><div class="v" id="q-entropy">—</div></div>
+              <div class="quant-cell"><div class="k">Momentum normalizado</div><div class="v" id="q-z">—</div></div>
+              <div class="quant-cell"><div class="k">Retorno medio / vela</div><div class="v" id="q-return">—</div></div>
+              <div class="quant-cell"><div class="k">Riesgo / beneficio</div><div class="v" id="q-rr">—</div></div>
+              <div class="quant-cell"><div class="k">Umbral de equilibrio</div><div class="v" id="q-ev">—</div></div>
+            </div>
+            <div class="model-note"><i data-lucide="flask-conical"></i><span id="q-note">Requiere al menos 10 retornos. No es una probabilidad histórica calibrada ni una garantía.</span></div>
           </div>
           </details>
         </div>
@@ -393,9 +416,10 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
           <div class="mode-warning"><i data-lucide="shield-alert"></i><span>Las órdenes se envían a Binance Testnet. AUTO puede operar sin confirmación mientras esté activo.</span></div>
 
           <div class="actions" id="actions">
-            <button class="act buy" onclick="orden('COMPRAR')"><i data-lucide="arrow-up-right"></i> Comprar</button>
-            <button class="act sell" onclick="orden('VENDER')"><i data-lucide="arrow-down-right"></i> Vender</button>
+            <button class="act buy" onclick="abrirOrden('COMPRAR')"><i data-lucide="arrow-up-right"></i> Comprar</button>
+            <button class="act sell" onclick="abrirOrden('VENDER')"><i data-lucide="arrow-down-right"></i> Vender</button>
           </div>
+          <div class="order-status" id="order-status"><span class="spinner"></span><span id="order-status-text">Procesando orden…</span></div>
           <button class="danger-btn" onclick="parada()"><i data-lucide="octagon-alert"></i> Parada de emergencia</button>
         </div>
       </div>
@@ -428,6 +452,20 @@ button:disabled{cursor:not-allowed;filter:saturate(.3)}
 </div>
 
 <div class="toast" id="toast"><i data-lucide="info"></i> <span id="toast-txt"></span></div>
+<dialog class="order-dialog" id="order-dialog">
+  <div class="dialog-h"><b id="order-dialog-title">Revisar orden</b><button class="dialog-close" onclick="cerrarOrden()" aria-label="Cerrar"><i data-lucide="x"></i></button></div>
+  <div class="dialog-b">
+    <div class="pill testnet"><i data-lucide="shield-check"></i> Binance Testnet · fondos ficticios</div>
+    <div class="order-review">
+      <div class="review-cell"><div class="k">Operación</div><div class="v" id="review-side">—</div></div>
+      <div class="review-cell"><div class="k">Precio de referencia</div><div class="v" id="review-price">—</div></div>
+      <div class="review-cell"><div class="k">Cantidad / importe</div><div class="v" id="review-size">—</div></div>
+      <div class="review-cell"><div class="k">Tipo de orden</div><div class="v">MARKET</div></div>
+    </div>
+    <div class="dialog-warning"><i data-lucide="triangle-alert"></i><span>El precio final lo determina Binance al ejecutar. Puede diferir del precio mostrado por latencia y deslizamiento.</span></div>
+  </div>
+  <div class="dialog-actions"><button class="dialog-cancel" onclick="cerrarOrden()">Cancelar</button><button class="dialog-confirm" id="order-confirm">Confirmar venta</button></div>
+</dialog>
 
 <script>
 lucide.createIcons();
@@ -451,7 +489,7 @@ const fmtTime=value=>{
 };
 const chartDate=time=>new Intl.DateTimeFormat('es-PE',{timeZone:PANEL_TZ,day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(Number(time)*1000));
 const utcTitle=value=>{const date=asUtcDate(value);return date?`UTC: ${date.toISOString().replace('T',' ').slice(0,19)}`:''};
-let allBalances=[],allEvents=[],allTrades=[],activityFilter='all';
+let allBalances=[],allEvents=[],allTrades=[],activityFilter='all',latestState=null,orderInFlight=false,pendingOrder=null;
 
 function pairAssets(symbol){
   const quotes=['FDUSD','USDT','USDC','BUSD','TUSD','BTC','ETH','BNB'];
@@ -535,6 +573,7 @@ async function cargar(){
   }
   catch(e){ setLive(false); return; }
   setLive(true);
+  latestState=d;
   $('last-sync').textContent=fmtDate(new Date());
 
   $('price').textContent = d.precio ? nf(d.precio)+' USDT' : '—';
@@ -582,6 +621,7 @@ async function cargar(){
     $('m-slow').textContent = s.sma_lenta!=null?nf(s.sma_lenta):'—';
     $('m-confidence').textContent = s.confianza!=null?s.confianza+'%':'—';
     $('m-volatility').textContent = s.volatilidad_pct!=null?nf(s.volatilidad_pct,3)+'%':'—';
+    renderQuant(s,d.reglas||{});
   }
 
   // Posición + reglas + botones
@@ -601,6 +641,20 @@ async function cargar(){
   // Log
   allEvents=d.bot.eventos||[];renderEvents();
   lucide.createIcons();
+}
+
+function renderQuant(s,rules){
+  const up=Number(s.probabilidad_alcista_pct),down=Number(s.probabilidad_bajista_pct),available=Number.isFinite(up)&&Number.isFinite(down);
+  $('q-up').textContent=available?nf(up,1)+'%':'—';$('q-down').textContent=available?nf(down,1)+'%':'—';
+  $('q-up-bar').style.width=(available?up:50)+'%';$('q-down-bar').style.width=(available?down:50)+'%';
+  $('q-base').textContent=s.probabilidad_base_alcista_pct!=null?nf(s.probabilidad_base_alcista_pct,1)+'%':'—';
+  $('q-entropy').textContent=s.incertidumbre_pct!=null?nf(s.incertidumbre_pct,1)+'%':'—';
+  $('q-z').textContent=s.momentum_z!=null?nf(s.momentum_z,3)+' σ':'—';
+  $('q-return').textContent=s.retorno_medio_pct!=null?(s.retorno_medio_pct>=0?'+':'')+nf(s.retorno_medio_pct,4)+'%':'—';
+  const tp=Number(rules.take_profit_pct),sl=Number(rules.stop_loss_pct),validRisk=tp>0&&sl>0;
+  $('q-rr').textContent=validRisk?`1 : ${nf(tp/sl,2)}`:'—';
+  $('q-ev').textContent=validRisk?nf(sl/(tp+sl)*100,1)+'% aciertos':'—';
+  $('q-note').textContent=available?`Modelo logístico no calibrado · ${s.muestra_retornos||0} retornos de ${currentInterval}. Combina spread SMA, momentum y RSI; no es una garantía ni un backtest.`:'Requiere al menos 10 retornos para estimar la distribución.';
 }
 
 function renderBalances(){
@@ -706,8 +760,8 @@ function renderPosicion(d, modo){
   const acts = $('actions');
   acts.classList.toggle('show', modo!=='OFF');
   const enPos = !!(p && p.en_posicion);
-  acts.querySelector('.buy').disabled = enPos;
-  acts.querySelector('.sell').disabled = !enPos;
+  acts.querySelector('.buy').disabled = orderInFlight||enPos;
+  acts.querySelector('.sell').disabled = orderInFlight||!enPos;
   acts.querySelector('.buy').style.opacity = enPos?.45:1;
   acts.querySelector('.sell').style.opacity = enPos?1:.45;
 }
@@ -735,22 +789,49 @@ async function parada(){
   toast(d.mensaje||'Parada de emergencia activada');cargar();
 }
 
-async function orden(tipo){
-  const verbo = tipo==='COMPRAR'?'Comprar':'Vender';
-  if(!confirm(`¿Confirmas ${verbo.toLowerCase()} a precio de mercado?`)) return;
+function abrirOrden(tipo){
+  if(orderInFlight||!latestState)return;
+  pendingOrder=tipo;const buy=tipo==='COMPRAR',position=latestState.posicion||{},rules=latestState.reglas||{};
+  $('order-dialog-title').textContent=buy?'Revisar compra':'Revisar venta';
+  $('review-side').textContent=buy?'COMPRA':'VENTA';
+  $('review-side').className='v '+(buy?'positive':'negative');
+  $('review-price').textContent=latestState.precio?nf(latestState.precio)+' USDT':'No disponible';
+  $('review-size').textContent=buy?nf(rules.orden_usdt||0)+' USDT':nf(position.cantidad||0,8)+' '+pairAssets('{{ symbol }}')[0];
+  const confirm=$('order-confirm');confirm.textContent=buy?'Confirmar compra':'Confirmar venta';confirm.classList.toggle('buy',buy);
+  $('order-dialog').showModal();lucide.createIcons();
+}
+
+function cerrarOrden(){if(!orderInFlight&&$('order-dialog').open)$('order-dialog').close()}
+
+function setOrderBusy(busy,label='Procesando orden…'){
+  orderInFlight=busy;$('order-status').classList.toggle('show',busy);$('order-status-text').textContent=label;
+  $('order-confirm').disabled=busy;
+  if(latestState)renderPosicion(latestState,latestState.bot.modo);
+}
+
+async function ejecutarOrden(){
+  const tipo=pendingOrder,verbo=tipo==='COMPRAR'?'Compra':'Venta';if(!tipo||orderInFlight)return;
+  cerrarOrden();setOrderBusy(true,`${verbo} enviada a Binance; esperando confirmación…`);
   try{
     const fd=new FormData(); fd.append('tipo',tipo);
     const r = await fetch('/api/orden',{method:'POST',body:fd});
-    const d = await r.json();
-    if(r.ok && d.ok){ toast(d.mensaje||`${verbo} ejecutado`); }
-    else{ toast('⚠ '+(d.mensaje||d.detail||'No se pudo ejecutar')); }
-  }catch(e){ toast('⚠ Error de conexión'); }
-  cargar();
+    if(r.status===401){location.href='/login';return}
+    const raw=await r.text();let d={};
+    try{d=raw?JSON.parse(raw):{}}catch(e){d={mensaje:raw&&raw.length<240?raw:`El servidor respondió HTTP ${r.status} sin un detalle JSON válido.`}}
+    const incident=d.incidente||r.headers.get('X-Request-ID');
+    if(r.ok&&d.ok){toast(d.mensaje||`${verbo} ejecutada`,5200)}
+    else{toast(`⚠ ${d.mensaje||d.detail||`La ${verbo.toLowerCase()} no fue confirmada.`}${incident?` · Incidente ${incident}`:''}`,8000)}
+  }catch(e){
+    toast(`⚠ No se recibió respuesta del servidor (${e.name||'error de red'}). Revisa el estado del despliegue antes de repetir la orden.`,8000);
+  }finally{
+    pendingOrder=null;setOrderBusy(false);
+    await Promise.allSettled([cargar(),cargarHistorial(),cargarVelas()]);
+  }
 }
 let tt;
-function toast(msg){
+function toast(msg,duration=3600){
   $('toast-txt').textContent=msg; $('toast').classList.add('show');
-  clearTimeout(tt); tt=setTimeout(()=>$('toast').classList.remove('show'),2800);
+  clearTimeout(tt); tt=setTimeout(()=>$('toast').classList.remove('show'),duration);
 }
 
 initChart();
@@ -764,6 +845,8 @@ $('activity-filter').addEventListener('click',event=>{
   activityFilter=button.dataset.filter;
   document.querySelectorAll('#activity-filter button').forEach(item=>item.classList.toggle('on',item===button));renderEvents();
 });
+$('order-confirm').addEventListener('click',ejecutarOrden);
+$('order-dialog').addEventListener('cancel',event=>{if(orderInFlight)event.preventDefault()});
 function setupCollapse(buttonId,panelId,key){
   const button=$(buttonId),panel=$(panelId);let collapsed=false;
   try{collapsed=localStorage.getItem(key)==='collapsed'}catch(e){}
