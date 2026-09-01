@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, Form, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 
@@ -23,6 +23,7 @@ from contextlib import asynccontextmanager
 from .binance_client import cliente, BinanceError
 from .bot import estado, Modo
 from .config import config
+from . import auth
 from . import engine
 from . import trader
 from .strategy import sma_serie
@@ -41,8 +42,43 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def requerir_auth(request: Request):
+    """Dependencia para las rutas /api: corta con 401 si no hay sesion valida."""
+    if not auth.esta_autenticado(request):
+        raise HTTPException(status_code=401, detail="No autenticado")
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    # Si ya tiene sesion, no tiene sentido pedir el PIN otra vez
+    if auth.esta_autenticado(request):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/api/login")
+def api_login(pin: str = Form(...)):
+    if not auth.pin_correcto(pin):
+        return JSONResponse({"ok": False}, status_code=401)
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(
+        auth.COOKIE, auth.crear_token(),
+        max_age=auth.DURACION_SEG, httponly=True, samesite="lax",
+    )
+    return resp
+
+
+@app.post("/api/logout")
+def api_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE)
+    return resp
+
+
 @app.get("/", response_class=HTMLResponse)
 def panel(request: Request):
+    if not auth.esta_autenticado(request):
+        return RedirectResponse("/login", status_code=303)
     return templates.TemplateResponse(
         "index.html",
         {
@@ -53,7 +89,7 @@ def panel(request: Request):
     )
 
 
-@app.get("/api/estado")
+@app.get("/api/estado", dependencies=[Depends(requerir_auth)])
 def api_estado():
     """Todo lo que el panel necesita para refrescarse."""
     resultado: dict = {
@@ -95,7 +131,7 @@ def api_estado():
     return resultado
 
 
-@app.post("/api/modo")
+@app.post("/api/modo", dependencies=[Depends(requerir_auth)])
 def api_cambiar_modo(modo: str = Form(...)):
     modo = modo.strip().upper()
     try:
@@ -106,7 +142,7 @@ def api_cambiar_modo(modo: str = Form(...)):
     return {"ok": True, "modo": nuevo.value}
 
 
-@app.post("/api/orden")
+@app.post("/api/orden", dependencies=[Depends(requerir_auth)])
 def api_orden(tipo: str = Form(...)):
     """Orden manual desde el panel: COMPRAR o VENDER."""
     tipo = tipo.strip().upper()
@@ -119,7 +155,7 @@ def api_orden(tipo: str = Form(...)):
     raise HTTPException(status_code=400, detail=f"Tipo invalido: {tipo}")
 
 
-@app.get("/api/velas")
+@app.get("/api/velas", dependencies=[Depends(requerir_auth)])
 def api_velas():
     """Velas + medias moviles para el grafico del panel."""
     try:

@@ -184,6 +184,7 @@ body{
     <div class="top-right">
       <span class="pill" id="live-pill"><span class="dot" id="live-dot"></span> <span id="live-txt">Conectando…</span></span>
       <span class="pill testnet" id="conn-pill"><i data-lucide="shield-check"></i> <span>{{ modo_conexion }}</span></span>
+      <span class="pill" id="logout-pill" style="cursor:pointer" onclick="salir()" title="Cerrar sesión"><i data-lucide="log-out"></i></span>
     </div>
   </div>
 
@@ -332,7 +333,11 @@ const TREND = {alcista:'trending-up',bajista:'trending-down',lateral:'move-right
 
 async function cargar(){
   let d;
-  try{ d = await (await fetch('/api/estado')).json(); }
+  try{
+    const res = await fetch('/api/estado');
+    if(res.status===401){ location.href='/login'; return; }
+    d = await res.json();
+  }
   catch(e){ setLive(false); return; }
   setLive(true);
 
@@ -433,6 +438,11 @@ function renderPosicion(d, modo){
 function setLive(ok){
   $('live-dot').className='dot'+(ok?' live':'');
   $('live-txt').textContent=ok?'En vivo':'Sin conexión';
+}
+
+async function salir(){
+  await fetch('/api/logout',{method:'POST'});
+  location.href='/login';
 }
 
 async function setModo(m){
