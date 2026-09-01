@@ -16,4 +16,7 @@ data/
 android/.gradle/
 android/**/build/
 android/local.properties
+android/app/google-services.json
+*.jks
+*.keystore
 *.apk

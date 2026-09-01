@@ -15,9 +15,17 @@ class ConfigTests(unittest.TestCase):
             candidate.validar()
 
     def test_safe_mainnet_lock_is_reported_without_invalidating_development(self):
-        candidate = replace(config, environment="development", use_testnet=False, enable_live_trading=False)
+        candidate = replace(
+            config, environment="development", beta_only=False,
+            use_testnet=False, enable_live_trading=False,
+        )
         warnings = candidate.validar()
         self.assertTrue(any("ENABLE_LIVE_TRADING" in item for item in warnings))
+
+    def test_beta_lock_rejects_mainnet(self):
+        candidate = replace(config, beta_only=True, use_testnet=False, enable_live_trading=False)
+        with self.assertRaises(ConfigError):
+            candidate.validar()
 
 
 if __name__ == "__main__":

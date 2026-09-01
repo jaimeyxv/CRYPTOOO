@@ -41,6 +41,9 @@ class EstadoBot:
                 storage.add_event(level, category, mensaje)
             except sqlite3.Error:
                 logger.exception("No se pudo persistir un evento")
+            # El envio es asincrono; no bloquea el motor ni la persistencia.
+            from .notifications import notify_event
+            notify_event(level, category, mensaje)
 
     def registrar_evento(self, mensaje: str, level: str = "INFO", category: str = "trading") -> None:
         with self._lock:

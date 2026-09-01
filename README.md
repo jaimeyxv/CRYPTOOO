@@ -251,6 +251,7 @@ DATA_DIR=/app/data
 BINANCE_API_KEY=TU_API_KEY_DE_TESTNET
 BINANCE_API_SECRET=TU_API_SECRET_DE_TESTNET
 USE_TESTNET=true
+BETA_ONLY=true
 ENABLE_LIVE_TRADING=false
 SYMBOL=BTCUSDT
 PANEL_PASSWORD=UNA_CONTRASENA_LARGA_Y_UNICA
@@ -283,9 +284,11 @@ Sin este volumen, el historial SQLite se perderá cuando Railway reemplace el co
 
 Para la prueba comparte únicamente la URL y la contraseña del panel. La misma instancia, saldo ficticio e historial serán compartidos por todas las personas que accedan; no publiques esa información en canales abiertos.
 
-## Aplicación Android sin anuncios
+## Aplicación Android beta sin anuncios
 
-El repositorio incluye una aplicación Android ligera en `android/`. No incorpora SDK publicitario, analítica, compras ni permisos sensibles: únicamente acceso a Internet y estado de red. La aplicación abre el panel HTTPS de Railway en un WebView endurecido, mantiene la sesión, permite descargar el CSV y envía enlaces externos al navegador.
+El repositorio incluye una aplicación Android ligera en `android/`. No incorpora publicidad, analítica ni compras. Utiliza Internet, estado de red y el permiso de notificaciones de Android. La aplicación abre el panel HTTPS de Railway en un WebView endurecido, mantiene la sesión, permite descargar el CSV y envía enlaces externos al navegador.
+
+Las compras, ventas, cambios de modo, paradas de riesgo y fallos del motor llegan como notificaciones nativas incluso con la interfaz cerrada. La notificación no ejecuta órdenes: informa de un evento que el servidor ya persistió. El APK y el backend permanecen bloqueados en Binance Spot Testnet mediante `BETA_ONLY=true`.
 
 La interfaz web cambia automáticamente según el dispositivo:
 
@@ -294,12 +297,28 @@ La interfaz web cambia automáticamente según el dispositivo:
 - Móvil: una columna, controles táctiles de al menos 44 px, gráficas compactas y tablas desplazables.
 - Se respetan rotación, áreas seguras, zoom del sistema y navegación atrás de Android.
 
+### Activar las notificaciones nativas
+
+1. Crea un proyecto en Firebase y registra una aplicación Android con el paquete `com.aurum.trading`. Google Analytics no es necesario.
+2. Descarga `google-services.json`. No lo subas al repositorio. Conviértelo a base64 en PowerShell:
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("google-services.json"))
+   ```
+
+3. En GitHub abre **Settings → Secrets and variables → Actions → Secrets** y crea `FIREBASE_GOOGLE_SERVICES_JSON_BASE64` con el resultado.
+4. En Firebase abre **Project settings → Service accounts**, genera una clave privada y guárdala fuera del repositorio. Convierte ese segundo JSON a base64 con el mismo comando.
+5. En Railway añade `FCM_SERVICE_ACCOUNT_JSON` con el segundo valor base64 y confirma `BETA_ONLY=true` y `USE_TESTNET=true`.
+6. Redespliega Railway. Instala el APK nuevo, acepta el permiso de notificaciones e inicia sesión una vez para registrar el dispositivo.
+
+Los dos archivos tienen propósitos distintos: `google-services.json` identifica la app durante la compilación; la cuenta de servicio autoriza a Railway para enviar mensajes. Nunca deben compartirse ni confirmarse en Git.
+
 ### Generar el APK sin instalar Android Studio
 
 1. En GitHub abre **Settings → Secrets and variables → Actions → Variables**.
 2. Crea `AURUM_URL` con la URL HTTPS de Railway. Si conservas `https://web-production-93f88c.up.railway.app`, el proyecto ya la usa como valor predeterminado.
 3. Abre **Actions → Android APK → Run workflow**. Un cambio dentro de `android/` también inicia la compilación automáticamente.
-4. Cuando finalice, abre la ejecución y descarga el artefacto `aurum-android-debug`.
+4. Cuando finalice, abre la ejecución y descarga el artefacto `aurum-testnet-beta`.
 5. Descomprime `app-debug.apk`, transfiérelo a la tablet y autoriza temporalmente **Instalar aplicaciones desconocidas** para el gestor de archivos utilizado.
 
 El APK debug está firmado automáticamente por Android y es apropiado para pruebas privadas. Para distribuir en Google Play se debe generar un Android App Bundle firmado con un keystore privado y aplicar el proceso de publicación de Play Console.

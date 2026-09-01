@@ -45,6 +45,7 @@ class Config:
     api_key: str
     api_secret: str
     use_testnet: bool
+    beta_only: bool
     enable_live_trading: bool
     symbol: str
     panel_password: str
@@ -70,6 +71,7 @@ class Config:
     perdida_max_diaria_usdt: float
     cooldown_seg: int
     http_timeout_seg: float
+    fcm_service_account_json: str
 
     @property
     def base_url(self) -> str:
@@ -123,6 +125,8 @@ class Config:
             errores.append("ALLOWED_HOSTS no puede ser * en produccion")
         if not self.use_testnet and not self.enable_live_trading:
             avisos.append("Mainnet esta configurado, pero ENABLE_LIVE_TRADING=false bloquea ordenes")
+        if self.beta_only and not self.use_testnet:
+            errores.append("BETA_ONLY=true exige USE_TESTNET=true; Mainnet esta bloqueado en esta version")
         if errores:
             raise ConfigError("Configuracion invalida: " + "; ".join(errores))
         return avisos
@@ -135,6 +139,7 @@ def cargar_config() -> Config:
         api_key=os.getenv("BINANCE_API_KEY", "").strip(),
         api_secret=os.getenv("BINANCE_API_SECRET", "").strip(),
         use_testnet=_bool("USE_TESTNET", True),
+        beta_only=_bool("BETA_ONLY", True),
         enable_live_trading=_bool("ENABLE_LIVE_TRADING", False),
         symbol=os.getenv("SYMBOL", "BTCUSDT").strip().upper(),
         panel_password=password,
@@ -160,6 +165,7 @@ def cargar_config() -> Config:
         perdida_max_diaria_usdt=_float("PERDIDA_MAX_DIARIA_USDT", 50),
         cooldown_seg=_int("COOLDOWN_SEG", 300),
         http_timeout_seg=_float("HTTP_TIMEOUT_SEG", 10),
+        fcm_service_account_json=os.getenv("FCM_SERVICE_ACCOUNT_JSON", "").strip(),
     )
 
 

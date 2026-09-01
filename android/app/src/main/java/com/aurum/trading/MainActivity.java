@@ -1,5 +1,6 @@
 package com.aurum.trading;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
@@ -9,6 +10,8 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.content.pm.PackageManager;
 import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,6 +26,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 public final class MainActivity extends Activity {
     private WebView webView;
@@ -48,6 +52,12 @@ public final class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(3));
         root.addView(progress, progressParams);
         setContentView(root);
+
+        AurumMessagingService.createChannel(this);
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1001);
+        }
 
         configureWebView();
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
@@ -96,6 +106,9 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 CookieManager.getInstance().flush();
+                if (url.startsWith(BuildConfig.AURUM_URL) && !url.endsWith("/login")) {
+                    FirebaseMessaging.getInstance().getToken().addOnSuccessListener(TokenRegistrar::register);
+                }
                 progress.setVisibility(View.GONE);
             }
 

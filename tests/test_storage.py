@@ -54,6 +54,13 @@ class StorageTests(unittest.TestCase):
         self.store.set_runtime_state("operation_mode", "OFF")
         self.assertEqual(self.store.get_runtime_state("operation_mode"), "OFF")
 
+    def test_push_device_registration_and_revocation(self):
+        token = "firebase-token-" + "x" * 32
+        self.store.register_push_device(token, "android", "Tablet beta")
+        self.assertEqual(self.store.push_tokens(), [token])
+        self.store.unregister_push_device(token)
+        self.assertEqual(self.store.push_tokens(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,7 @@ from .binance_client import BinanceError, INTERVALOS, cliente
 from .bot import Modo, estado
 from .config import config
 from .storage import storage
+from .notifications import configured as notifications_configured
 from .process_lock import ProcessLock
 from .strategy import rsi_serie, sma_serie
 
@@ -311,8 +312,24 @@ def api_configuracion():
         "rsi_periodo": config.rsi_periodo, "analisis_seg": config.analisis_seg,
         "max_operaciones_dia": config.max_operaciones_dia,
         "perdida_max_diaria_usdt": config.perdida_max_diaria_usdt,
-        "cooldown_seg": config.cooldown_seg,
+        "cooldown_seg": config.cooldown_seg, "beta_only": config.beta_only,
+        "notificaciones_push": notifications_configured(),
     }
+
+
+@app.post("/api/dispositivos", dependencies=[Depends(requerir_auth)])
+def registrar_dispositivo(token: str = Form(...), label: str = Form(default="Aurum Android")):
+    try:
+        storage.register_push_device(token.strip(), "android", label.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "push_configurado": notifications_configured()}
+
+
+@app.delete("/api/dispositivos", dependencies=[Depends(requerir_auth)])
+def eliminar_dispositivo(token: str = Form(...)):
+    storage.unregister_push_device(token.strip())
+    return {"ok": True}
 
 
 @app.get("/healthz")

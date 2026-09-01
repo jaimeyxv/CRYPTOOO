@@ -79,6 +79,14 @@ class Storage:
                     value TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS push_devices (
+                    token TEXT PRIMARY KEY,
+                    platform TEXT NOT NULL,
+                    label TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL
+                );
                 """
             )
         self._migrate_json()
@@ -218,6 +226,30 @@ class Storage:
         with self._lock, self._connect() as con:
             row = con.execute("SELECT value FROM runtime_state WHERE key = ?", (key,)).fetchone()
         return str(row["value"]) if row is not None else None
+
+    def register_push_device(self, token: str, platform: str = "android", label: str = "") -> None:
+        if not 20 <= len(token) <= 4096:
+            raise ValueError("token push invalido")
+        now = utc_now()
+        with self._lock, self._connect() as con:
+            con.execute(
+                """INSERT INTO push_devices(token, platform, label, enabled, created_at, last_seen_at)
+                   VALUES (?, ?, ?, 1, ?, ?)
+                   ON CONFLICT(token) DO UPDATE SET platform=excluded.platform,
+                   label=excluded.label, enabled=1, last_seen_at=excluded.last_seen_at""",
+                (token, platform[:30], label[:100], now, now),
+            )
+
+    def unregister_push_device(self, token: str) -> None:
+        with self._lock, self._connect() as con:
+            con.execute("UPDATE push_devices SET enabled = 0 WHERE token = ?", (token,))
+
+    def push_tokens(self) -> list[str]:
+        with self._lock, self._connect() as con:
+            rows = con.execute(
+                "SELECT token FROM push_devices WHERE enabled = 1 ORDER BY last_seen_at DESC LIMIT 50"
+            ).fetchall()
+        return [str(row["token"]) for row in rows]
 
     def performance(self) -> dict:
         with self._lock, self._connect() as con:
