@@ -83,8 +83,6 @@ def estado_riesgo() -> dict:
 def comprar(motivo: str = "orden manual") -> dict:
     with _lock:
         pos = cargar_posicion()
-        if pos["en_posicion"]:
-            return {"ok": False, "mensaje": "Ya existe una posicion abierta."}
         riesgo = estado_riesgo()
         if not riesgo["permite_compra"]:
             mensaje = "Compra bloqueada: " + ", ".join(riesgo["bloqueos"])
@@ -109,21 +107,37 @@ def comprar(motivo: str = "orden manual") -> dict:
         quote_qty = _quote_ejecutado(orden, cantidad, precio)
         ahora = utc_now()
         order_id = _order_id(orden)
-        pos = {
-            "en_posicion": True, "cantidad": cantidad, "precio_entrada": precio,
-            "quote_spent": quote_qty, "hora": ahora, "symbol": config.symbol,
-            "order_id": order_id,
-        }
+        es_adicional = bool(pos["en_posicion"])
+        if es_adicional:
+            cantidad_total = float(pos["cantidad"]) + cantidad
+            coste_total = float(pos.get("quote_spent") or 0) + quote_qty
+            pos = {
+                "en_posicion": True, "cantidad": cantidad_total,
+                "precio_entrada": coste_total / cantidad_total,
+                "quote_spent": coste_total, "hora": pos.get("hora") or ahora,
+                "symbol": config.symbol, "order_id": order_id,
+            }
+        else:
+            pos = {
+                "en_posicion": True, "cantidad": cantidad, "precio_entrada": precio,
+                "quote_spent": quote_qty, "hora": ahora, "symbol": config.symbol,
+                "order_id": order_id,
+            }
         trade = {
             "symbol": config.symbol, "side": "BUY", "quantity": cantidad,
             "price": precio, "quote_quantity": quote_qty, "reason": motivo,
             "order_id": order_id, "mode": estado.modo.value, "created_at": ahora,
         }
         storage.record_buy(pos, trade)
-        estado.registrar_evento(
-            f"COMPRA ejecutada: {cantidad:.8f} @ {precio:.2f} ({motivo})", "INFO", "order"
+        detalle = (
+            f" | posicion {pos['cantidad']:.8f} @ media {pos['precio_entrada']:.2f}"
+            if es_adicional else ""
         )
-        return {"ok": True, "mensaje": f"Compra ejecutada @ {precio:.2f}", "posicion": pos}
+        estado.registrar_evento(
+            f"COMPRA ejecutada: {cantidad:.8f} @ {precio:.2f}{detalle} ({motivo})", "INFO", "order"
+        )
+        mensaje = "Entrada adicional" if es_adicional else "Compra"
+        return {"ok": True, "mensaje": f"{mensaje} ejecutada @ {precio:.2f}", "posicion": pos}
 
 
 def vender(motivo: str = "orden manual") -> dict:
@@ -196,10 +210,10 @@ def gestionar_auto(analisis: dict, klines: list[list]) -> None:
     if precio <= 0:
         return
     pos = cargar_posicion()
+    ventana = klines[-config.caida_ventana:] if klines else []
+    max_reciente = max((float(k[2]) for k in ventana), default=precio)
+    caida_pct = (max_reciente - precio) / max_reciente * 100 if max_reciente else 0
     if not pos["en_posicion"]:
-        ventana = klines[-config.caida_ventana:] if klines else []
-        max_reciente = max((float(k[2]) for k in ventana), default=precio)
-        caida_pct = (max_reciente - precio) / max_reciente * 100 if max_reciente else 0
         if caida_pct >= config.comprar_caida_pct:
             comprar(f"caida de {caida_pct:.2f}% desde {max_reciente:.2f}")
         elif analisis.get("señal") == "COMPRAR":
@@ -213,3 +227,7 @@ def gestionar_auto(analisis: dict, klines: list[list]) -> None:
         vender(f"stop-loss {variacion:.2f}%")
     elif analisis.get("señal") == "VENDER":
         vender("señal de estrategia")
+    elif caida_pct >= config.comprar_caida_pct:
+        comprar(f"entrada adicional por caida de {caida_pct:.2f}% desde {max_reciente:.2f}")
+    elif analisis.get("señal") == "COMPRAR":
+        comprar("entrada adicional por señal de estrategia")

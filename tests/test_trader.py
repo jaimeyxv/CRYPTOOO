@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -52,11 +53,16 @@ class TraderTests(unittest.TestCase):
         self.assertFalse(self.store.position()["en_posicion"])
         self.assertAlmostEqual(self.store.performance()["pnl_realizado"], 10)
 
-    def test_second_buy_is_rejected_when_position_exists(self):
-        self.assertTrue(trader.comprar("first")["ok"])
-        second = trader.comprar("second")
-        self.assertFalse(second["ok"])
-        self.assertIn("posicion", second["mensaje"])
+    def test_second_buy_accumulates_position_at_weighted_average(self):
+        with patch.object(trader, "config", replace(trader.config, cooldown_seg=0)):
+            self.assertTrue(trader.comprar("first")["ok"])
+            second = trader.comprar("second")
+        self.assertTrue(second["ok"])
+        position = self.store.position()
+        self.assertAlmostEqual(position["cantidad"], 0.02)
+        self.assertAlmostEqual(position["quote_spent"], 200)
+        self.assertAlmostEqual(position["precio_entrada"], 10000)
+        self.assertEqual(len(self.store.trades()), 2)
 
 
 if __name__ == "__main__":
