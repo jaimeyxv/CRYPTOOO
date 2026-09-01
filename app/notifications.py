@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aurum-push")
 _credentials = None
 _credentials_lock = Lock()
-_ALLOWED_CATEGORIES = {"order", "mode", "risk", "engine", "reconciliation"}
+_ALLOWED_CATEGORIES = {"order", "mode", "risk", "engine", "reconciliation", "signal"}
 
 
 def _service_info() -> dict | None:
@@ -93,6 +93,7 @@ def notify_event(level: str, category: str, message: str) -> None:
         "risk": "Alerta de riesgo · Testnet",
         "engine": "Estado del motor",
         "reconciliation": "Reconciliación requerida",
+        "signal": "Nueva señal de trading · Testnet",
     }
     if level.upper() == "ERROR":
         title = "Aurum requiere atención"
