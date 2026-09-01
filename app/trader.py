@@ -1,165 +1,215 @@
-"""
-Ejecucion de ordenes y gestion de la posicion (Fase 3).
-
-Reglas de operacion (todas configurables desde el .env):
-  ENTRADA (cuando NO tenemos posicion):
-    - Comprar si el precio ha caido COMPRAR_CAIDA_PCT % desde el maximo reciente
-      (compra "en el dip"), o si la estrategia da señal de COMPRAR.
-  SALIDA (cuando SI tenemos posicion):
-    - TAKE PROFIT: vender si el precio sube TAKE_PROFIT_PCT % sobre la entrada.
-    - STOP LOSS:   vender si el precio baja STOP_LOSS_PCT % bajo la entrada.
-    - o si la estrategia da señal de VENDER.
-
-La posicion se guarda en data/posicion.json para no perderla si se reinicia.
-Todo ocurre en la cuenta configurada (TESTNET mientras USE_TESTNET=true).
-"""
+"""Ejecucion Spot, limites de riesgo y registro de operaciones."""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 from threading import Lock
 
-from .binance_client import cliente, BinanceError
+from .binance_client import BinanceError, cliente
 from .bot import estado
 from .config import config
+from .storage import storage, utc_now
 
-_DATA = Path(__file__).resolve().parent.parent / "data"
-_ARCHIVO = _DATA / "posicion.json"
 _lock = Lock()
 
 
-def _ahora() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def _posicion_vacia() -> dict:
-    return {"en_posicion": False, "cantidad": 0.0, "precio_entrada": 0.0,
-            "hora": None, "symbol": config.symbol}
-
-
 def cargar_posicion() -> dict:
-    try:
-        return json.loads(_ARCHIVO.read_text(encoding="utf-8"))
-    except (FileNotFoundError, ValueError):
-        return _posicion_vacia()
+    return storage.position()
 
 
 def guardar_posicion(pos: dict) -> None:
-    _DATA.mkdir(exist_ok=True)
-    _ARCHIVO.write_text(json.dumps(pos, indent=2), encoding="utf-8")
+    """Compatibilidad para herramientas existentes; SQLite es la fuente de verdad."""
+    if pos.get("en_posicion"):
+        storage.set_position(pos)
+    else:
+        storage.clear_position()
 
 
 def _precio_medio(orden: dict) -> float:
-    """Precio medio de ejecucion a partir de la respuesta de Binance."""
     ejecutado = float(orden.get("executedQty", 0) or 0)
-    gastado = float(orden.get("cummulativeQuoteQty", 0) or 0)
-    if ejecutado > 0 and gastado > 0:
-        return gastado / ejecutado
-    fills = orden.get("fills", [])
-    if fills:
-        return float(fills[0]["price"])
+    quote = float(orden.get("cummulativeQuoteQty", 0) or 0)
+    if ejecutado > 0 and quote > 0:
+        return quote / ejecutado
+    fills = orden.get("fills") or []
+    total_qty = sum(float(fill.get("qty", 0)) for fill in fills)
+    if total_qty:
+        return sum(float(fill["price"]) * float(fill["qty"]) for fill in fills) / total_qty
     return 0.0
 
 
-# ---------------------------------------------------------------- acciones
+def _quote_ejecutado(orden: dict, cantidad: float, precio: float) -> float:
+    return float(orden.get("cummulativeQuoteQty", 0) or 0) or cantidad * precio
+
+
+def _order_id(orden: dict) -> str | None:
+    value = orden.get("orderId") or orden.get("clientOrderId")
+    return str(value) if value is not None else None
+
+
+def _base_quote() -> tuple[str, str]:
+    info = cliente.info_simbolo()
+    return info["base"], info["quote"]
+
+
+def estado_riesgo() -> dict:
+    actividad = storage.daily_activity()
+    cooldown_restante = 0
+    if actividad["ultima_compra"]:
+        try:
+            ultima = datetime.fromisoformat(actividad["ultima_compra"])
+            cooldown_restante = max(0, config.cooldown_seg - int((datetime.now(timezone.utc) - ultima).total_seconds()))
+        except ValueError:
+            cooldown_restante = 0
+    razones = []
+    if actividad["compras"] >= config.max_operaciones_dia:
+        razones.append("limite diario de compras alcanzado")
+    if actividad["pnl"] <= -config.perdida_max_diaria_usdt:
+        razones.append("perdida maxima diaria alcanzada")
+    if cooldown_restante:
+        razones.append(f"cooldown activo ({cooldown_restante}s)")
+    if not config.use_testnet and not config.enable_live_trading:
+        razones.append("trading real bloqueado por ENABLE_LIVE_TRADING")
+    return {
+        "permite_compra": not razones,
+        "bloqueos": razones,
+        "compras_hoy": actividad["compras"],
+        "max_compras": config.max_operaciones_dia,
+        "pnl_hoy": round(actividad["pnl"], 4),
+        "perdida_max_diaria": config.perdida_max_diaria_usdt,
+        "cooldown_restante": cooldown_restante,
+        "live_trading_habilitado": config.use_testnet or config.enable_live_trading,
+    }
+
+
 def comprar(motivo: str = "orden manual") -> dict:
-    """Compra a mercado gastando ORDEN_USDT. Devuelve {ok, mensaje}."""
     with _lock:
         pos = cargar_posicion()
         if pos["en_posicion"]:
-            return {"ok": False, "mensaje": "Ya hay una posicion abierta."}
+            return {"ok": False, "mensaje": "Ya existe una posicion abierta."}
+        riesgo = estado_riesgo()
+        if not riesgo["permite_compra"]:
+            mensaje = "Compra bloqueada: " + ", ".join(riesgo["bloqueos"])
+            estado.registrar_evento(mensaje, "WARNING", "risk")
+            return {"ok": False, "mensaje": mensaje, "riesgo": riesgo}
         try:
-            usdt_libre = cliente.saldo_libre(_quote())
-            if usdt_libre < config.orden_usdt:
-                return {"ok": False, "mensaje": f"Saldo insuficiente: {usdt_libre:.2f} USDT."}
+            _, quote_asset = _base_quote()
+            saldo = cliente.saldo_libre(quote_asset)
+            if saldo < config.orden_usdt:
+                return {"ok": False, "mensaje": f"Saldo insuficiente: {saldo:.2f} {quote_asset}."}
             orden = cliente.comprar_mercado(config.orden_usdt)
-        except BinanceError as e:
-            estado._log(f"Error al COMPRAR: {e}")
-            return {"ok": False, "mensaje": str(e)}
+        except BinanceError as exc:
+            estado.registrar_evento(f"Error al comprar: {exc}", "ERROR", "order")
+            return {"ok": False, "mensaje": str(exc)}
 
         cantidad = float(orden.get("executedQty", 0) or 0)
         precio = _precio_medio(orden)
-        pos = {"en_posicion": True, "cantidad": cantidad, "precio_entrada": precio,
-               "hora": _ahora(), "symbol": config.symbol}
-        guardar_posicion(pos)
-        estado._log(f"COMPRA ejecutada: {cantidad:.6f} @ {precio:.2f} USDT ({motivo})")
+        if cantidad <= 0 or precio <= 0:
+            mensaje = "Binance acepto la orden, pero no devolvio una ejecucion completa; revisa la cuenta"
+            estado.registrar_evento(mensaje, "ERROR", "reconciliation")
+            return {"ok": False, "mensaje": mensaje}
+        quote_qty = _quote_ejecutado(orden, cantidad, precio)
+        ahora = utc_now()
+        order_id = _order_id(orden)
+        pos = {
+            "en_posicion": True, "cantidad": cantidad, "precio_entrada": precio,
+            "quote_spent": quote_qty, "hora": ahora, "symbol": config.symbol,
+            "order_id": order_id,
+        }
+        trade = {
+            "symbol": config.symbol, "side": "BUY", "quantity": cantidad,
+            "price": precio, "quote_quantity": quote_qty, "reason": motivo,
+            "order_id": order_id, "mode": estado.modo.value, "created_at": ahora,
+        }
+        storage.record_buy(pos, trade)
+        estado.registrar_evento(
+            f"COMPRA ejecutada: {cantidad:.8f} @ {precio:.2f} ({motivo})", "INFO", "order"
+        )
         return {"ok": True, "mensaje": f"Compra ejecutada @ {precio:.2f}", "posicion": pos}
 
 
 def vender(motivo: str = "orden manual") -> dict:
-    """Vende a mercado toda la posicion. Devuelve {ok, mensaje}."""
     with _lock:
         pos = cargar_posicion()
         if not pos["en_posicion"]:
-            return {"ok": False, "mensaje": "No hay posicion que vender."}
+            return {"ok": False, "mensaje": "No existe una posicion abierta."}
         try:
-            # Vendemos el saldo real disponible del activo base (mas fiable que la cantidad guardada)
-            libre = cliente.saldo_libre(_base())
-            cantidad = min(libre, pos["cantidad"]) if libre > 0 else pos["cantidad"]
+            base_asset, _ = _base_quote()
+            libre = cliente.saldo_libre(base_asset)
+            if libre <= 0:
+                mensaje = f"No hay saldo libre de {base_asset}; es necesario reconciliar la posicion"
+                estado.registrar_evento(mensaje, "ERROR", "reconciliation")
+                return {"ok": False, "mensaje": mensaje}
+            cantidad = min(libre, float(pos["cantidad"]))
             orden = cliente.vender_mercado(cantidad)
-        except BinanceError as e:
-            estado._log(f"Error al VENDER: {e}")
-            return {"ok": False, "mensaje": str(e)}
+        except BinanceError as exc:
+            estado.registrar_evento(f"Error al vender: {exc}", "ERROR", "order")
+            return {"ok": False, "mensaje": str(exc)}
 
+        ejecutado = float(orden.get("executedQty", 0) or 0)
         precio = _precio_medio(orden)
-        entrada = pos["precio_entrada"] or precio
-        ganancia_pct = (precio - entrada) / entrada * 100 if entrada else 0.0
-        guardar_posicion(_posicion_vacia())
-        estado._log(f"VENTA ejecutada @ {precio:.2f} USDT | Resultado: {ganancia_pct:+.2f}% ({motivo})")
-        return {"ok": True, "mensaje": f"Venta ejecutada @ {precio:.2f} ({ganancia_pct:+.2f}%)"}
-
-
-# ---------------------------------------------------------------- helpers
-def _base() -> str:
-    return cliente.info_simbolo()["base"]
-
-
-def _quote() -> str:
-    return cliente.info_simbolo()["quote"]
+        if ejecutado <= 0 or precio <= 0:
+            mensaje = "Venta aceptada sin detalle de ejecucion; revisa Binance antes de reintentar"
+            estado.registrar_evento(mensaje, "ERROR", "reconciliation")
+            return {"ok": False, "mensaje": mensaje}
+        quote_qty = _quote_ejecutado(orden, ejecutado, precio)
+        coste = float(pos.get("quote_spent") or (pos["cantidad"] * pos["precio_entrada"]))
+        coste_vendido = coste * min(1.0, ejecutado / float(pos["cantidad"]))
+        pnl = quote_qty - coste_vendido
+        pnl_pct = pnl / coste_vendido * 100 if coste_vendido else 0.0
+        restante = max(0.0, float(pos["cantidad"]) - ejecutado)
+        posicion_restante = None
+        if restante > float(pos["cantidad"]) * 0.01:
+            posicion_restante = dict(pos)
+            posicion_restante["cantidad"] = restante
+            posicion_restante["quote_spent"] = max(0.0, coste - coste_vendido)
+        trade = {
+            "symbol": config.symbol, "side": "SELL", "quantity": ejecutado,
+            "price": precio, "quote_quantity": quote_qty, "realized_pnl": pnl,
+            "realized_pnl_pct": pnl_pct, "reason": motivo, "order_id": _order_id(orden),
+            "mode": estado.modo.value, "created_at": utc_now(),
+        }
+        storage.record_sell(trade, posicion_restante)
+        estado.registrar_evento(
+            f"VENTA ejecutada @ {precio:.2f} | Resultado {pnl:+.2f} ({pnl_pct:+.2f}%) ({motivo})",
+            "INFO", "order",
+        )
+        detalle = " (salida parcial)" if posicion_restante else ""
+        return {"ok": True, "mensaje": f"Venta ejecutada @ {precio:.2f} ({pnl_pct:+.2f}%){detalle}",
+                "trade": trade, "posicion": posicion_restante}
 
 
 def estado_posicion(precio_actual: float | None = None) -> dict:
-    """Datos de la posicion para el panel, con P&L en vivo y niveles TP/SL."""
     pos = cargar_posicion()
     salida = dict(pos)
     if pos["en_posicion"] and pos["precio_entrada"]:
-        e = pos["precio_entrada"]
-        salida["take_profit"] = round(e * (1 + config.take_profit_pct / 100), 2)
-        salida["stop_loss"] = round(e * (1 - config.stop_loss_pct / 100), 2)
-        if precio_actual:
-            salida["pnl_pct"] = round((precio_actual - e) / e * 100, 2)
-            salida["valor_actual"] = round(pos["cantidad"] * precio_actual, 2)
+        entrada = float(pos["precio_entrada"])
+        salida["take_profit"] = round(entrada * (1 + config.take_profit_pct / 100), 8)
+        salida["stop_loss"] = round(entrada * (1 - config.stop_loss_pct / 100), 8)
+        if precio_actual and precio_actual > 0:
+            salida["pnl_pct"] = round((precio_actual - entrada) / entrada * 100, 3)
+            salida["pnl_no_realizado"] = round(float(pos["cantidad"]) * precio_actual - float(pos["quote_spent"]), 4)
+            salida["valor_actual"] = round(float(pos["cantidad"]) * precio_actual, 4)
     return salida
 
 
-# ---------------------------------------------------------------- modo AUTO
 def gestionar_auto(analisis: dict, klines: list[list]) -> None:
-    """
-    Se llama en cada ciclo del motor cuando el modo es AUTO.
-    Decide y ejecuta segun las reglas de porcentaje + la estrategia.
-    """
-    precio = analisis.get("precio") or 0.0
+    precio = float(analisis.get("precio") or 0)
     if precio <= 0:
         return
     pos = cargar_posicion()
-
     if not pos["en_posicion"]:
-        # Maximo reciente para medir la caida
-        ventana = klines[-config.caida_ventana:] if len(klines) >= config.caida_ventana else klines
-        max_reciente = max(float(k[2]) for k in ventana) if ventana else precio
-        caida_pct = (max_reciente - precio) / max_reciente * 100 if max_reciente else 0.0
-
+        ventana = klines[-config.caida_ventana:] if klines else []
+        max_reciente = max((float(k[2]) for k in ventana), default=precio)
+        caida_pct = (max_reciente - precio) / max_reciente * 100 if max_reciente else 0
         if caida_pct >= config.comprar_caida_pct:
             comprar(f"caida de {caida_pct:.2f}% desde {max_reciente:.2f}")
         elif analisis.get("señal") == "COMPRAR":
-            comprar("señal de la estrategia")
-    else:
-        entrada = pos["precio_entrada"] or precio
-        subida_pct = (precio - entrada) / entrada * 100
-        if subida_pct >= config.take_profit_pct:
-            vender(f"take-profit +{subida_pct:.2f}%")
-        elif subida_pct <= -config.stop_loss_pct:
-            vender(f"stop-loss {subida_pct:.2f}%")
-        elif analisis.get("señal") == "VENDER":
-            vender("señal de la estrategia")
+            comprar("señal de estrategia")
+        return
+    entrada = float(pos["precio_entrada"] or precio)
+    variacion = (precio - entrada) / entrada * 100
+    if variacion >= config.take_profit_pct:
+        vender(f"take-profit +{variacion:.2f}%")
+    elif variacion <= -config.stop_loss_pct:
+        vender(f"stop-loss {variacion:.2f}%")
+    elif analisis.get("señal") == "VENDER":
+        vender("señal de estrategia")
